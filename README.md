@@ -10,8 +10,10 @@ Used as an interface board to connect directly to the Neato XV/Botvac Lidar and 
 
 v1.4.1 - Updated 2018/03/26 by Dror Gluska
 * Replace Command Parser with CmdArduino, SetAngle not implemented.
+
 v1.4.0
 * Teensy LC Support
+
 v1.3.0 - Updated 2016/03/20
 * http://www.getsurreal.com/products/xv-lidar-controller
 * https://github.com/getSurreal/XV_Lidar_Controller
