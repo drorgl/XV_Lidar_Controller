@@ -17,7 +17,7 @@
 #include <PID.h>
 #include <EEPROM.h>
 #include <EEPROMAnything.h>
-#include <SerialCommand.h>
+#include <Cmd.h>
 
 const int N_ANGLES = 360;                                       // # of angles (0..359)
 const int SHOW_ALL_ANGLES = N_ANGLES;                           // value means 'display all angle data, 0..359'
@@ -121,7 +121,11 @@ uint16_t aryQuality[N_DATA_QUADS] = {0, 0, 0, 0}; // same with 'quality'
 uint16_t motor_rph = 0;
 uint16_t startingAngle = 0;                      // the first scan angle (of group of 4, based on 'index'), in degrees (0..359)
 
-SerialCommand sCmd;
+const char Banner[] = "XV Lidar Controller";
+const char Prompt[] = "> ";
+const char BadCommand[] = "Command not recognized.";
+Cmd cmdSerial(&Serial, 50, false, (char*)&Banner, (char*)&Prompt, (char*)&BadCommand);
+
 
 boolean ledState = LOW;
 
@@ -140,10 +144,17 @@ const int ledPin = 13;
 void setup() {
   EEPROM_readAnything(0, xv_config);
   if ( xv_config.id != EEPROM_ID) { // verify EEPROM values have been initialized
-    initEEPROM();
+    initEEPROM(0,NULL);
   }
   pinMode(xv_config.motor_pwm_pin, OUTPUT);
   Serial.begin(115200);                            // USB serial
+  //while (!Serial)
+  //{
+	 // ; // wait for serial port to connect. Needed for Leonardo only
+  //}
+  Serial.print(F("XV Lidar Controller Firmware Version "));
+  Serial.println(xv_config.version);
+
 #if defined(__AVR_ATmega32U4__)
   Serial1.begin(115200);                           // XV LDS data
 
@@ -170,7 +181,9 @@ void setup() {
 void loop() {
   byte aryInvalidDataFlag[N_DATA_QUADS] = {0, 0, 0, 0}; // non-zero = INVALID_DATA_FLAG or STRENGTH_WARNING_FLAG is set
 
-  sCmd.readSerial();  // check for incoming serial commands
+  cmdSerial.Poll();
+
+  //sCmd.readSerial();  // check for incoming serial commands
   if (Serial1.available() > 0) {                  // read byte from LIDAR and relay to USB
     inByte = Serial1.read();                      // get incoming byte:
     if (xv_config.raw_data)
@@ -402,7 +415,7 @@ byte eValidatePacket() {
 /*
    initEEPROM
 */
-void initEEPROM() {
+void initEEPROM(int arg_cnt, char **args) {
   xv_config.id = 0x06;
   strcpy(xv_config.version, "1.3.0");
 
@@ -417,8 +430,8 @@ void initEEPROM() {
 #endif
 
   xv_config.rpm_setpoint = 200;  // desired RPM
-  xv_config.rpm_min = 200;
-  xv_config.rpm_max = 300;
+  xv_config.rpm_min = 180;
+  xv_config.rpm_max = 349;
   xv_config.pwm_min = 100;
   xv_config.pwm_max = 1023;
   xv_config.sample_time = 20;
@@ -426,8 +439,8 @@ void initEEPROM() {
   xv_config.Ki = 1.0;
   xv_config.Kd = 0.0;
 
-  xv_config.motor_enable = true;
-  xv_config.raw_data = true;
+  xv_config.motor_enable = false;
+  xv_config.raw_data = false;
   xv_config.show_dist = false;
   xv_config.show_rpm = false;
   xv_config.show_interval = false;
@@ -441,58 +454,59 @@ void initEEPROM() {
    initSerialCommands
 */
 void initSerialCommands() {
-  sCmd.addCommand("help",        help);
-  sCmd.addCommand("Help",        help);
-  sCmd.addCommand("ShowConfig",  showConfig);
-  sCmd.addCommand("SaveConfig",  saveConfig);
-  sCmd.addCommand("ResetConfig", initEEPROM);
+	
+  cmdSerial.Add("help",        help);
+  cmdSerial.Add("Help",        help);
+  cmdSerial.Add("ShowConfig",  showConfig);
+  cmdSerial.Add("SaveConfig",  saveConfig);
+  cmdSerial.Add("ResetConfig", initEEPROM);
 
-  sCmd.addCommand("SetAngle",      setAngle);
-  sCmd.addCommand("SetRPM",        setRPM);
-  sCmd.addCommand("SetKp",         setKp);
-  sCmd.addCommand("SetKi",         setKi);
-  sCmd.addCommand("SetKd",         setKd);
-  sCmd.addCommand("SetSampleTime", setSampleTime);
+  cmdSerial.Add("SetAngle",      setAngle);
+  cmdSerial.Add("SetRPM",        setRPM);
+  cmdSerial.Add("SetKp",         setKp);
+  cmdSerial.Add("SetKi",         setKi);
+  cmdSerial.Add("SetKd",         setKd);
+  cmdSerial.Add("SetSampleTime", setSampleTime);
 
-  sCmd.addCommand("MotorOff", motorOff);
-  sCmd.addCommand("MotorOn",  motorOn);
+  cmdSerial.Add("MotorOff", motorOff);
+  cmdSerial.Add("MotorOn",  motorOn);
 
-  sCmd.addCommand("ShowRaw",  showRaw);
-  sCmd.addCommand("HideRaw", hideRaw);
-  sCmd.addCommand("ShowDist",  showDist);
-  sCmd.addCommand("HideDist",  hideDist);
-  sCmd.addCommand("ShowRPM",  showRPM);
-  sCmd.addCommand("HideRPM",  hideRPM);
-  sCmd.addCommand("ShowErrors", showErrors);
-  sCmd.addCommand("HideErrors", hideErrors);
-  sCmd.addCommand("ShowInterval", showInterval);
-  sCmd.addCommand("HideInterval", hideInterval);
-  sCmd.addCommand("ShowAll", showAll);
-  sCmd.addCommand("HideAll", hideAll);
+  cmdSerial.Add("ShowRaw",  showRaw);
+  cmdSerial.Add("HideRaw", hideRaw);
+  cmdSerial.Add("ShowDist",  showDist);
+  cmdSerial.Add("HideDist",  hideDist);
+  cmdSerial.Add("ShowRPM",  showRPM);
+  cmdSerial.Add("HideRPM",  hideRPM);
+  cmdSerial.Add("ShowErrors", showErrors);
+  cmdSerial.Add("HideErrors", hideErrors);
+  cmdSerial.Add("ShowInterval", showInterval);
+  cmdSerial.Add("HideInterval", hideInterval);
+  cmdSerial.Add("ShowAll", showAll);
+  cmdSerial.Add("HideAll", hideAll);
 
 }
 /*
    showAll - Show Dist, Errors, RPM, and Interval data
 */
-void showAll() {
-  showDist();
-  showErrors();
-  showRPM();
-  showInterval();
+void showAll(int arg_cnt, char **args) {
+  showDist(0,NULL);
+  showErrors(0, NULL);
+  showRPM(0, NULL);
+  showInterval(0, NULL);
 }
 /*
    hideAll - Hide Dist, Errors, RPM, and Interval data
 */
-void hideAll() {
-  hideDist();
-  hideErrors();
-  hideRPM();
-  hideInterval();
+void hideAll(int arg_cnt, char **args) {
+  hideDist(0, NULL);
+  hideErrors(0, NULL);
+  hideRPM(0, NULL);
+  hideInterval(0, NULL);
 }
 /*
    showInterval - enable display of Time interval (which happens once per revolution, at angle 0
 */
-void showInterval() {
+void showInterval(int arg_cnt, char **args) {
   xv_config.show_interval = true;
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -502,7 +516,7 @@ void showInterval() {
 /*
    hideInterval - suppress display of Time interval
 */
-void hideInterval() {
+void hideInterval(int arg_cnt, char **args) {
   xv_config.show_interval = false;
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -512,7 +526,7 @@ void hideInterval() {
 /*
    showErrors
 */
-void showErrors() {
+void showErrors(int arg_cnt, char **args) {
   xv_config.show_errors = true;                                  // enable error display
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -522,7 +536,7 @@ void showErrors() {
 /*
    hideErrors
 */
-void hideErrors() {                                    // disable error display
+void hideErrors(int arg_cnt, char **args) {                                    // disable error display
   xv_config.show_errors = false;
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -532,10 +546,10 @@ void hideErrors() {                                    // disable error display
 /*
    showRPM
 */
-void showRPM() {
+void showRPM(int arg_cnt, char **args) {
   xv_config.show_rpm = true;
   if (xv_config.raw_data == true) {
-    hideRaw();
+    hideRaw(0, NULL);
   }
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -545,7 +559,7 @@ void showRPM() {
 /*
    hideRPM
 */
-void hideRPM() {
+void hideRPM(int arg_cnt, char **args) {
   xv_config.show_rpm = false;
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -553,8 +567,8 @@ void hideRPM() {
   }
 }
 
-void showDist() {
-  hideRaw();
+void showDist(int arg_cnt, char **args) {
+  hideRaw(0, NULL);
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
     Serial.println(F("Code,Angle,Distance(mm),Signal strength"));
@@ -562,7 +576,7 @@ void showDist() {
   xv_config.show_dist = true;
 }
 
-void hideDist() {
+void hideDist(int arg_cnt, char **args) {
   xv_config.show_dist = false;
   if (xv_config.show_dist == false) {                  // suppress activity message if we're executing 'show distance'
     Serial.println(F(" "));
@@ -578,112 +592,113 @@ void hideDist() {
    Exits with: N/A
    TEST THIS STRING:  SetAngles 16-20, 300-305, 123-124, 10
 */
-void setAngle() {
-  char c, *arg;
-  boolean syntax_error = false;
-  int doing_from_to, from, to, ix, lToken, n_groups = 0;
+void setAngle(int arg_cnt, char **args) {
+  //char c, *arg;
+  //boolean syntax_error = false;
+  //int doing_from_to, from, to, ix, lToken, n_groups = 0;
 
-  for (ix = 0; ix < N_ANGLES; ix++)                      // initialize
-    xv_config.aryAngles[ix] = false;
-  doing_from_to = 0;                                     // state = doing 'from'
-  // Make sure that there is at least 1 angle or group of angles present
-  do {
-    arg = sCmd.next();                                   // get the next token
-    if (arg == NULL) {                                   // it's empty -- just exit
-      sCmd.readSerial();
-      arg = sCmd.next();
-      break;
-    }
-    // see if the token has an embedded "-", meaning from - to
-    lToken = strlen(arg);                                // get the length of the current token
-    for (ix = 0; ix < lToken; ix++) {
-      c = arg[ix];
-      if (c == ',') {                                    // optional trailing comma
-        doing_from_to = 0;
-        break;
-      }
-      else if (c == '-') {                               // optional '-' means "from - to"
-        to = 0;
-        doing_from_to = 1;                               // from now on, we're doing 'to'
-      }
-      else if (c == ' ') {                               // ignore blanks
-        Serial.println(F("{ }"));
-      }
-      else if ((c >= '0') && (c <= '9')) {
-        if (doing_from_to == 0) {
-          from *= 10;
-          from += c - '0';
-          to = from;                                      // default to = from
-          n_groups++;                                     // count the number of active groups (s/b >= 1)
-        }
-        else {
-          to *= 10;
-          to += c - '0';
-        }
-      }
-      else {
-        syntax_error = true;
-        n_groups = 0;
-        break;
-      }
-    }  // for (ix = 0; ix < lToken; ix++)
-    // validate 'from' and 'to' and set 'xv_config.aryAngles' with correct values
-    if ((from >= 0) && (from < N_ANGLES) && (to >= 0) && (to < N_ANGLES)) {
-      if (to >= from) {
-        for (ix = from; ix <= to; ix++) {
-          xv_config.aryAngles[ix] = true;
-        }
-      }
-      else {
-        syntax_error = true;
-        break;
-      }
-    }
-    else {
-      syntax_error = true;
-      break;
-    }
-    from = 0;
-    to = 0;
-    doing_from_to = 0;
-  }  // do
-  while (arg != NULL);
-  if (n_groups == 0)
-    syntax_error = true;
+  //for (ix = 0; ix < N_ANGLES; ix++)                      // initialize
+  //  xv_config.aryAngles[ix] = false;
+  //doing_from_to = 0;                                     // state = doing 'from'
+  //// Make sure that there is at least 1 angle or group of angles present
+  //do {
+  //  arg = (arg_cnt > 0) ? args[0] : NULL; //sCmd.next();                                   // get the next token
+  //  if (arg == NULL) {                                   // it's empty -- just exit
+  //    //sCmd.readSerial();
+  //    arg = sCmd.next();
+  //    break;
+  //  }
+  //  // see if the token has an embedded "-", meaning from - to
+  //  lToken = strlen(arg);                                // get the length of the current token
+  //  for (ix = 0; ix < lToken; ix++) {
+  //    c = arg[ix];
+  //    if (c == ',') {                                    // optional trailing comma
+  //      doing_from_to = 0;
+  //      break;
+  //    }
+  //    else if (c == '-') {                               // optional '-' means "from - to"
+  //      to = 0;
+  //      doing_from_to = 1;                               // from now on, we're doing 'to'
+  //    }
+  //    else if (c == ' ') {                               // ignore blanks
+  //      Serial.println(F("{ }"));
+  //    }
+  //    else if ((c >= '0') && (c <= '9')) {
+  //      if (doing_from_to == 0) {
+  //        from *= 10;
+  //        from += c - '0';
+  //        to = from;                                      // default to = from
+  //        n_groups++;                                     // count the number of active groups (s/b >= 1)
+  //      }
+  //      else {
+  //        to *= 10;
+  //        to += c - '0';
+  //      }
+  //    }
+  //    else {
+  //      syntax_error = true;
+  //      n_groups = 0;
+  //      break;
+  //    }
+  //  }  // for (ix = 0; ix < lToken; ix++)
+  //  // validate 'from' and 'to' and set 'xv_config.aryAngles' with correct values
+  //  if ((from >= 0) && (from < N_ANGLES) && (to >= 0) && (to < N_ANGLES)) {
+  //    if (to >= from) {
+  //      for (ix = from; ix <= to; ix++) {
+  //        xv_config.aryAngles[ix] = true;
+  //      }
+  //    }
+  //    else {
+  //      syntax_error = true;
+  //      break;
+  //    }
+  //  }
+  //  else {
+  //    syntax_error = true;
+  //    break;
+  //  }
+  //  from = 0;
+  //  to = 0;
+  //  doing_from_to = 0;
+  //}  // do
+  //while (arg != NULL);
+  //if (n_groups == 0)
+  //  syntax_error = true;
 
-  // Handle syntax errors
-  if (syntax_error) {
-    Serial.println(F(" "));
-    Serial.println(F("Incorrect syntax"));
-    Serial.println(F("  Example: SetAngle 0, 15-30, 45-50, 10"));
-    Serial.println(F("  Example: SetAngle 0-359 to show all angles."));
-    Serial.println(F("Notes: Use a space after each comma"));
-    Serial.println(F("       No particular order is required"));
-    Serial.println(F("       In a from-to pair, the 1st value must be lowest. From-to pairs can overlap ranges."));
-  }
-  else {                                                  // no errors detected, display the angles and start
-    // We're ready to process multiple angles
-    Serial.println(F(""));
-    Serial.print(F("Angles:"));
-    for (int ix = 0; ix < N_ANGLES; ix++) {               // display the angle array
-      if (xv_config.aryAngles[ix]) {
-        Serial.print(ix, DEC);
-        Serial.print(F(","));
-      }
-    }
-    Serial.println(F(""));
-    showDist();
-  }  // if not (syntax_error)
+  //// Handle syntax errors
+  //if (syntax_error) {
+  //  Serial.println(F(" "));
+  //  Serial.println(F("Incorrect syntax"));
+  //  Serial.println(F("  Example: SetAngle 0, 15-30, 45-50, 10"));
+  //  Serial.println(F("  Example: SetAngle 0-359 to show all angles."));
+  //  Serial.println(F("Notes: Use a space after each comma"));
+  //  Serial.println(F("       No particular order is required"));
+  //  Serial.println(F("       In a from-to pair, the 1st value must be lowest. From-to pairs can overlap ranges."));
+  //}
+  //else {                                                  // no errors detected, display the angles and start
+  //  // We're ready to process multiple angles
+  //  Serial.println(F(""));
+  //  Serial.print(F("Angles:"));
+  //  for (int ix = 0; ix < N_ANGLES; ix++) {               // display the angle array
+  //    if (xv_config.aryAngles[ix]) {
+  //      Serial.print(ix, DEC);
+  //      Serial.print(F(","));
+  //    }
+  //  }
+  //  Serial.println(F(""));
+  //  showDist(0,NULL);
+  //}  // if not (syntax_error)
+	Serial.println("Not Implemented");
 }
 
-void motorOff() {
+void motorOff(int arg_cnt, char **args) {
   xv_config.motor_enable = false;
   Timer3.pwm(xv_config.motor_pwm_pin, 0);
   Serial.println(F(" "));
   Serial.println(F("Motor off"));
 }
 
-void motorOn() {
+void motorOn(int arg_cnt, char **args) {
   xv_config.motor_enable = true;
   Timer3.pwm(xv_config.motor_pwm_pin, pwm_val);
   rpm_err = 0;  // reset rpm error
@@ -694,14 +709,14 @@ void motorOn() {
 void motorCheck() {  // Make sure the motor RPMs are good else shut it down
   now = millis();
   if (now - motor_check_timer > motor_check_interval) {
-    if ((motor_rpm < xv_config.rpm_min or motor_rpm > xv_config.rpm_max) and pwm_val > 1000) {
+    if ((motor_rpm < xv_config.rpm_min || motor_rpm > xv_config.rpm_max) && pwm_val > 1000) {
       rpm_err++;
     }
     else {
       rpm_err = 0;
     }
     if (rpm_err > rpm_err_thresh) {
-      motorOff();
+      motorOff(0,NULL);
       ledState = LOW;
       digitalWrite(ledPin, ledState);
     }
@@ -709,26 +724,26 @@ void motorCheck() {  // Make sure the motor RPMs are good else shut it down
   }
 }
 
-void hideRaw() {
+void hideRaw(int arg_cnt, char **args) {
   xv_config.raw_data = false;
   //Serial.println(F(" "));
   //Serial.println(F("Raw lidar data disabled"));
 }
 
-void showRaw() {
+void showRaw(int arg_cnt, char **args) {
   xv_config.raw_data = true;
-  hideDist();
-  hideRPM();
+  hideDist(0, NULL);
+  hideRPM(0, NULL);
   //Serial.println(F(" "));
   //Serial.println(F("Lidar data enabled"));
 }
 
-void setRPM() {
+void setRPM(int arg_cnt, char **args) {
   double sVal = 0.0;
   char *arg;
   boolean syntax_error = false;
 
-  arg = sCmd.next();
+  arg = (arg_cnt > 1) ? args[1] : NULL; //sCmd.next();
   if (arg != NULL) {
     sVal = atof(arg);    // Converts a char string to a float
     if (sVal < xv_config.rpm_min) {
@@ -748,11 +763,6 @@ void setRPM() {
     syntax_error = true;
   }
 
-  arg = sCmd.next();
-  if (arg != NULL) {
-    syntax_error = true;
-  }
-
   if (syntax_error) {
     Serial.println(F(" "));
     Serial.println(F("Incorrect syntax.  Example: SetRPM 200"));
@@ -767,21 +777,16 @@ void setRPM() {
   }
 }
 
-void setKp() {
+void setKp(int arg_cnt, char **args) {
   double sVal = 0.0;
   char *arg;
   boolean syntax_error = false;
 
-  arg = sCmd.next();
+  arg = (arg_cnt > 1) ? args[1] : NULL; //sCmd.next();
   if (arg != NULL) {
     sVal = atof(arg);    // Converts a char string to a float
   }
   else {
-    syntax_error = true;
-  }
-
-  arg = sCmd.next();
-  if (arg != NULL) {
     syntax_error = true;
   }
 
@@ -798,21 +803,16 @@ void setKp() {
   }
 }
 
-void setKi() {
+void setKi(int arg_cnt, char **args) {
   double sVal = 0.0;
   char *arg;
   boolean syntax_error = false;
 
-  arg = sCmd.next();
+  arg = (arg_cnt > 1) ? args[1] : NULL; //sCmd.next();
   if (arg != NULL) {
     sVal = atof(arg);    // Converts a char string to a float
   }
   else {
-    syntax_error = true;
-  }
-
-  arg = sCmd.next();
-  if (arg != NULL) {
     syntax_error = true;
   }
 
@@ -829,21 +829,16 @@ void setKi() {
   }
 }
 
-void setKd() {
+void setKd(int arg_cnt, char **args) {
   double sVal = 0.0;
   char *arg;
   boolean syntax_error = false;
 
-  arg = sCmd.next();
+  arg = (arg_cnt > 1) ? args[1] : NULL;//sCmd.next();
   if (arg != NULL) {
     sVal = atof(arg);    // Converts a char string to a float
   }
   else {
-    syntax_error = true;
-  }
-
-  arg = sCmd.next();
-  if (arg != NULL) {
     syntax_error = true;
   }
 
@@ -860,21 +855,16 @@ void setKd() {
   }
 }
 
-void setSampleTime() {
+void setSampleTime(int arg_cnt, char **args) {
   double sVal = 0.0;
   char *arg;
   boolean syntax_error = false;
 
-  arg = sCmd.next();
+  arg = (arg_cnt > 1)? args[1] : NULL;// sCmd.next();
   if (arg != NULL) {
     sVal = atoi(arg);    // Converts a char string to an integer
   }
   else {
-    syntax_error = true;
-  }
-
-  arg = sCmd.next();
-  if (arg != NULL) {
     syntax_error = true;
   }
 
@@ -891,9 +881,9 @@ void setSampleTime() {
   }
 }
 
-void help() {
+void help(int arg_cnt, char **args) {
   if (xv_config.raw_data == true) {
-    hideRaw();
+    hideRaw(0, NULL);
   }
   Serial.println(F(" "));
   Serial.println(F(" "));
@@ -954,9 +944,9 @@ void help() {
   Serial.println(F(" "));
 }
 
-void showConfig() {
+void showConfig(int arg_cnt, char **args) {
   if (xv_config.raw_data == true) {
-    hideRaw();
+    hideRaw(0, NULL);
   }
   Serial.println(F(" "));
   Serial.println(F(" "));
@@ -1009,7 +999,7 @@ void showConfig() {
   Serial.println(F(" "));
 }
 
-void saveConfig() {
+void saveConfig(int arg_cnt, char **args) {
   EEPROM_writeAnything(0, xv_config);
   Serial.println(F("Config Saved."));
 }
